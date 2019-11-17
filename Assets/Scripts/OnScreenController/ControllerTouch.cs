@@ -1,124 +1,128 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
-
-public class ControllerTouch : MonoBehaviour, IPointerDownHandler, IPointerUpHandler//, IDragHandler
+using System.Collections.Generic;
+public class ControllerTouch :
+    MonoBehaviour,
+    //IPointerDownHandler, 
+    //IPointerUpHandler, 
+    IDragHandler, // required for IBeginDragHandler to work
+    IEndDragHandler, // // issue - OnEnDrag called on pointer up instead of on end moving, so get delta value in update
+    IBeginDragHandler
 {
+    //**********************
     [Header("Touch Values")]
-    [SerializeField] bool InTouch = false; // Touch area that used to control camera rotation
-    [SerializeField] Vector2 TouchValue = new Vector2();
+    [SerializeField] private bool _inDrag;
+    private PointerEventData _pointer = null;
+    [SerializeField] private Vector2 _delta = Vector2.zero;
 
-    [Tooltip("Touch valuse will be Lerped when finger UP")]
-    [SerializeField] bool TouchValueSmooth = true;
-    private Vector2 TouchValuePrevious = new Vector2();
-
+    [SerializeField] private bool _smoothTouch;
+    [SerializeField] private int _frameCount = 10;
+    [SerializeField] private float _touchSpeed = 10;
+    /// <summary>
+    /// last 20 delta values for smoothnes
+    /// </summary>
+    private List<Vector2> _deltaList = new List<Vector2>();
+    //**********************
     [Header("Mouse Settings")]
     [Tooltip("Will start Take value from mouse if area not in touch")]
-    [SerializeField] bool EmulateMouse = false;
+    [SerializeField] bool _emulateMouse = false;
     [Tooltip("Multiply MouseValue to get same params as with Touch")]
-    [SerializeField] float MouseMultiply = 20;
+    [SerializeField] float _mouseSpeed = 20;
 
     [Header("Mouse Values (Check EmulateMouse)")]
     [SerializeField] Vector2 MouseValue = new Vector2();
-    [SerializeField] float MouseWheel = 0;
-
-    string Name = "";
-    //**********************       
-    Vector2 PreJoy = new Vector2();
-    PointerEventData TouchData;
+    [SerializeField] float _mouseWheelValue = 0;
 
     //*************Check Boxes
     [Header("Reverce Touch values if required")]
-    [SerializeField] bool TouchReverceX = true;
-    [SerializeField] bool TouchReverceY = true;
+    [SerializeField] bool _touchReverceX = true;
+    [SerializeField] bool _touchReverceY = true;
     [SerializeField] bool MouseReverceX = false;
     [SerializeField] bool MouseReverceY = false;
     [SerializeField] bool MouseReverceWheel = false;
-    //**********************
 
-    private void OnEnable()
-    {
-        ResetTouch(false);
-    }
-    private void OnDisable()
-    {
-        ResetTouch(false);
-    }
+    //*******************
 
     private void Awake()
     {
-        Name = name;
         ControllerHub.AddToHub(gameObject);
         ControllerHub.AddTouchToHub(this);
     }
 
-    public void ResetTouch(bool touched = false)
+    public void OnBeginDrag(PointerEventData eventData)
     {
-        InTouch = touched;
-        //if (!TouchValueSmooth)
-        TouchValue = new Vector2();
+        _pointer = eventData;
     }
+    // required for OnBeginDrag to work
+    public void OnDrag(PointerEventData eventData) { }
 
-    public void OnPointerDown(PointerEventData data)
+    // issue - OnEnDrag called on pointer up instead of on end moving
+    public void OnEndDrag(PointerEventData eventData)
     {
-        ResetTouch(true);
-        TouchData = data;
-        PreJoy = TouchData.position;
+        //Debug.Log("OnEndDrag");
+        _pointer = null;
     }
-
-    public void OnPointerUp(PointerEventData data)
-    {
-        ResetTouch(false);
-    }
-
-    //public void OnDrag(PointerEventData data)
-    //{/*
-    //    joy = PreJoy - data.position;
-    //    PreJoy = data.position;
-
-    //   // if (DisableMouseLook)
-    //        ControllerHub.SetTouchValue(joy);
-    //    */
-    //}
 
     private void Update()
     {
-        if (InTouch)
+        if (_pointer != null)
         {
-            TouchValue = PreJoy - TouchData.position;
-            TouchValue.x = TouchReverceX ? -TouchValue.x : TouchValue.x;
-            TouchValue.y = TouchReverceY ? -TouchValue.y : TouchValue.y;
-
-            PreJoy = TouchData.position;
-
-            // Debug.LogFormat("x values= {0}  {1}; y values={2} , {3}", TouchValue.x, MouseValue.x, TouchValue.y, MouseValue.y);
+            _inDrag = true;
+            _delta = _pointer.delta;
         }
         else
         {
-            if (TouchValueSmooth)
-                TouchValue = Vector2.Lerp(TouchValuePrevious, Vector2.zero, Time.deltaTime * 10);
+            _inDrag = false;
+            _delta = Vector2.zero;
         }
 
-        TouchValuePrevious = TouchValue;
-
-        if (EmulateMouse)
+        // smothing _delta values by finding average from last _frameCOunt frames
+        if (_smoothTouch)
         {
-            MouseValue.x = MouseReverceX ? -Input.GetAxis("Mouse X") * MouseMultiply : Input.GetAxis("Mouse X") * MouseMultiply;
-            MouseValue.y = MouseReverceY ? -Input.GetAxis("Mouse Y") * MouseMultiply : Input.GetAxis("Mouse Y") * MouseMultiply;
+            _deltaList.Add(_delta);
 
-            MouseWheel = MouseReverceWheel ? -Input.GetAxis("Mouse ScrollWheel") : Input.GetAxis("Mouse ScrollWheel");
+            if (_deltaList.Count > _frameCount && _deltaList.Count > 0)
+                _deltaList.RemoveAt(0);
+
+            Vector2 sum = Vector2.zero;
+
+            for (int i = 0; i < _deltaList.Count; i++)
+            {
+                sum.x += _deltaList[i].x;
+                sum.y += _deltaList[i].y;
+            }
+
+            _delta.x = sum.x;
+            _delta.y = sum.y;
+        }
+
+        // upply touch inverse
+        _delta.x = (_touchReverceX) ? -_delta.x : _delta.x;
+        _delta.y = (_touchReverceY) ? -_delta.y : _delta.y;
+
+        // upply touch speed
+        _delta.x *= Time.deltaTime * _touchSpeed;
+        _delta.y *= Time.deltaTime * _touchSpeed;
+
+        if (_emulateMouse)
+        {
+            MouseValue.x = MouseReverceX ? -Input.GetAxis("Mouse X") * _mouseSpeed : Input.GetAxis("Mouse X") * _mouseSpeed;
+            MouseValue.y = MouseReverceY ? -Input.GetAxis("Mouse Y") * _mouseSpeed : Input.GetAxis("Mouse Y") * _mouseSpeed;
+
+            _mouseWheelValue = MouseReverceWheel ? -Input.GetAxis("Mouse ScrollWheel") : Input.GetAxis("Mouse ScrollWheel");
         }
     }
 
     #region "GET"
     public string GetControllerName()
     {
-        return Name;
+        return name;
     }
 
     public bool GetControllerInTouch()
     {
-        return InTouch;
+        return _inDrag;
     }
     /// <summary>
     /// /// Returns GetAxis with params Vector2(x,y)
@@ -126,10 +130,10 @@ public class ControllerTouch : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     /// <returns></returns>
     public Vector2 GetAxis()
     {
-        if (EmulateMouse && !InTouch)
+        if (_emulateMouse && !_inDrag)
             return MouseValue;
 
-        return TouchValue;
+        return _delta;
     }
     ///// <summary>
     ///// Returns GetAxis with params Vector3(x,0,y)
@@ -153,7 +157,7 @@ public class ControllerTouch : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     /// <returns></returns>
     public float GetMouseWheel()
     {
-        return MouseWheel;
+        return _mouseWheelValue;
     }
     #endregion
 
