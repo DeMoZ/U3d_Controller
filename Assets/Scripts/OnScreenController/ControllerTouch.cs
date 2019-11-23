@@ -93,8 +93,8 @@ public class ControllerTouch :
                 sum.y += _deltaList[i].y;
             }
 
-            _delta.x = sum.x;
-            _delta.y = sum.y;
+            _delta.x = sum.x / _deltaList.Count;
+            _delta.y = sum.y / _deltaList.Count;
         }
 
         // upply touch inverse
