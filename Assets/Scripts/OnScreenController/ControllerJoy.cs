@@ -330,7 +330,7 @@ public class ControllerJoy : MonoBehaviour, IPointerDownHandler, IPointerUpHandl
         Vector3 forward = transform.forward;
         Vector3 right = transform.right;
 
-        return GetAxisRelatedCalculation(forward, right, modifier, parallelToGroundLine);
+        return GetAxisRelatedCalculation(forward,  modifier, parallelToGroundLine);
     }
 
     /// <summary>
@@ -344,47 +344,30 @@ public class ControllerJoy : MonoBehaviour, IPointerDownHandler, IPointerUpHandl
     /// </example>
     public Vector3 GetAxisRelated(Vector3 forward, Vector3 right, string modifier = "Raw", bool parallelToGroundLine = true)
     {
-        return GetAxisRelatedCalculation(forward, right, modifier, parallelToGroundLine);
+        return GetAxisRelatedCalculation(forward, modifier, parallelToGroundLine);
     }
 
-    Vector3 GetAxisRelatedCalculation(Vector3 forward, Vector3 right, string modifier = "Raw", bool parallelToGroundLine = true)
+
+    /// <summary>
+    /// the calculation
+    /// </summary>
+    /// <param name="forwardToRelate"></param>
+    /// <param name="modifier"></param>
+    /// <param name="parallelToGroundLine"></param>
+    /// <returns></returns>
+    private Vector3 GetAxisRelatedCalculation(Vector3 forwardToRelate, string modifier = "Raw", bool parallelToGroundLine = true)
     {
-        Vector3 result = new Vector3();
         Vector2 joy = GetAxis(modifier); ;
-        Vector3 joyModified = new Vector3(joy.x, 0, joy.y);
+        Vector3 joyV3 = new Vector3(joy.x, 0, joy.y);
 
-        // Vector3 yModyfier = joyModified;
-        // modify direction according ground line
         if (parallelToGroundLine)
-        {
-            //float f = Vector3.Angle(Vector3.up, forward);
-            // float r = Vector3.Angle(Vector3.up, right);
+            forwardToRelate = Vector3.ProjectOnPlane(forwardToRelate, Vector3.up); // the rezult is same as make Vector3.y=0; // =)
 
-            //Vector3 notRotatedVectorF = Quaternion.AngleAxis(f, Vector3.forward) * forward;
-            
-            float magnitudeF = forward.magnitude;
-            float magnitudeR = right.magnitude;
-            
-            forward.y = 0;
-            right.y = 0;
-                        
-            forward = forward.normalized;
-            forward = forward * joyModified.z * magnitudeF;
+        float angle = Vector3.SignedAngle(Vector3.forward, forwardToRelate, Vector3.up);
 
-            right = right.normalized;
-            right = right * joyModified.x * magnitudeR;
-        }
-        else
-        {
-            forward = forward.normalized;
-            forward = forward * joyModified.z;
+        Vector3 joyV3modified = Quaternion.Euler(0, angle, 0) * joyV3;
 
-            right = right.normalized;
-            right = right * joyModified.x;
-        }
-        result = forward + right;
-        
-        return result;
+        return joyV3modified;
     }
     #endregion
 }
